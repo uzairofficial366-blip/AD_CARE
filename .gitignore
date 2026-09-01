@@ -5,5 +5,5 @@ out/
 .env.local
 *.log
 .DS_Store
-/prisma/dev.db
+/prisma/migrations
 /storage/uploads/
