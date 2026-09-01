@@ -1,33 +1,21 @@
-# Applications Platform
+# AD Care Pharmacy
 
-A production-oriented replacement for a Google Form application workflow: multi-step form with drafts,
-document upload, submission with reference numbers, status tracking, and an admin console.
-
-> **Note on form content:** no source Google Form was provided when this was built. The application form in
-> `lib/forms/definition.ts` is a representative placeholder (personal info → contact → employment status with
-> conditional fields → documents). The form UI, validation, review screen, and admin views are all
-> **schema-driven** from that one file — replacing it with your real questions does not require touching any
-> other code.
+A full-stack online pharmacy platform: prescription and OTC medicine ordering, pharmacist verification,
+admin management, delivery tracking, loyalty, and more.
 
 ## Features implemented
 
 - Email/password auth: bcrypt hashing, signed JWT session cookies, rate-limited login, generic error messages
-- Route-protecting middleware (server-side; role checks are re-verified in every route handler too)
-- Multi-step application wizard with autosave, save-and-resume drafts, conditional fields, review step, and
-  confirmation-before-submit
-- Idempotent submission (no duplicate records on double-click), auto-generated reference numbers
-  (`APP-YYYY-XXXXXX`)
-- Centralized application status model with a single source of truth for legal transitions
-  (`lib/applications/status.ts`)
-- Document upload with MIME + magic-byte validation, random non-guessable storage keys, and short-lived
-  signed download URLs (local-disk storage for dev — see "Known limitations")
-- Admin console: applications list (search/filter/pagination), application detail with status change +
-  history, CSV export, user management (role/active toggles)
-- Audit logging for status changes, application views, exports, and role changes
-- IDOR-safe authorization: every application/document access is checked against the caller's own user id
-  (or admin role) server-side — never trust a URL parameter or client-supplied role
-- Unit tests for status transitions, permission checks, and schema-driven validation (including conditional
-  field stripping)
+- Role-based access: CUSTOMER, PHARMACIST, ADMIN, SUPERADMIN
+- Product catalog with categories, brands, search, and filtering
+- Prescription upload and pharmacist review workflow
+- Shopping cart, wishlist, and checkout with multiple payment methods
+- Order management with full status lifecycle tracking
+- Admin console: products, orders, users, prescriptions, inventory/batches, suppliers, deliveries, promotions, reports, site settings
+- Customer features: refill reminders, support tickets, address management, loyalty points, referral system
+- Delivery agent assignment and tracking
+- Batch inventory management with expiry tracking
+- Unit tests for core business logic
 
 ## Known limitations (explicitly not implemented — not faked)
 
@@ -61,9 +49,11 @@ npm run prisma:seed       # creates an admin + sample user + sample applications
 npm run dev
 ```
 
-Seed accounts:
-- Admin: `admin@example.com` / `AdminPass123!`
-- User: `applicant@example.com` / `UserPass123!`
+Seed accounts (password for all: `Pharmacy123!`):
+- Super Admin: `superadmin@pharmacy.com`
+- Admin: `admin@pharmacy.com`
+- Pharmacist: `pharmacist@pharmacy.com`
+- Customer: `customer@pharmacy.com`
 
 ## Testing
 
@@ -86,36 +76,48 @@ npm test
 
 ```
 app/
-  (marketing)/        landing, privacy, terms, contact
-  (auth)/              login, register
-  dashboard/            user dashboard
-  application/          new draft + multi-step wizard + read-only summary
-  admin/                overview, applications, users
-  api/                  auth, applications, documents, admin routes
+  (marketing)/        landing page, privacy, terms, contact
+  (auth)/              login, register, forgot/reset password
+  account/             profile, orders, addresses, wishlist, prescriptions, refill reminders, support
+  admin/               dashboard, products, orders, users, prescriptions, brands, categories, batches,
+                       inventory, suppliers, purchase orders, deliveries, payments, promotions, reviews,
+                       refills, support, settings, site-settings, reports
+  cart/                shopping cart
+  checkout/            checkout flow
+  categories/          category listing by slug
+  offers/              promotions/offers page
+  prescriptions/       prescription upload
+  products/            product listing, product detail
+  api/                 REST API routes for all features
 lib/
-  auth/                password hashing, session/JWT, rate limiting
-  db/                   Prisma client singleton
-  forms/                schema-driven form definition (swap this for your real form)
-  validation/           Zod schemas generated from the form definition
-  applications/         centralized status transition model
-  permissions/           authorization checks (IDOR prevention)
-  storage/               object storage interface + local dev implementation, signed URLs, file-signature check
+  auth/                password hashing, session/JWT, rate limiting, RBAC
+  db/                  Prisma client singleton
+  permissions/         authorization checks
+  storage/             object storage interface + local dev implementation
+  email/               email helpers (not yet wired)
+  pdf/                 PDF generation helpers
+  types/               shared TypeScript types
 prisma/
-  schema.prisma          database schema
-  seed.ts                 dev seed data
-tests/unit/               status, permissions, validation tests
+  schema.prisma        database schema (30+ models)
+  seed.ts              dev seed data (users, products, categories, orders, etc.)
+tests/unit/            unit tests
 ```
 
 ## Database schema summary
 
-`User` → `Application` (1:many) → `ApplicationStatusHistory`, `Document`, `AdminNote` (1:many each).
-`AuditLog` references the acting `User`. Indexes on `email`, `referenceNumber`, `status`, `createdAt`, and
-foreign keys.
+`User` → `Address`, `Order`, `CartItem`, `WishlistItem`, `Prescription`, `Review`, `SupportTicket`,
+`Notification`, `LoyaltyAccount`, `Referral`, `MedicationSchedule`, `StockAlert`, `RefillReminder`.
+`Product` → `Category`, `Brand`, `OrderItem`, `Batch`, `StockAdjustment`, `Review`, `CartItem`, `WishlistItem`.
+`Order` → `OrderItem`, `Payment`, `Delivery`.
+`Batch` → `StockAdjustment`, `Supplier`.
+`PurchaseOrder` → `PurchaseOrderItem`, `Supplier`.
+Comprehensive indexes on all foreign keys, status fields, slugs, SKUs, and search-critical columns.
 
 ## Permission model
 
-- `USER`: create/edit own drafts, submit own applications, view own application status and history
-- `ADMIN`: everything a user can do, plus view/search all applications, change status (only along legal
-  transitions), add internal notes, manage users, export data
+- `CUSTOMER`: browse products, manage cart/wishlist, place orders, upload prescriptions, manage account
+- `PHARMACIST`: everything a customer can do, plus review and approve/reject prescriptions
+- `ADMIN`: everything a pharmacist can do, plus full admin panel access (products, orders, users, reports, settings)
+- `SUPERADMIN`: same as ADMIN (can be extended for multi-tenant or system-level operations)
 - Every check happens server-side in the route handler / server component, using the session's signed role
   — middleware is an additional layer, not the only one
