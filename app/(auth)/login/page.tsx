@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Pill, Lock, Mail, ArrowRight, ShieldCheck } from "lucide-react";
+import { Pill, Lock, Mail, ArrowRight, ShieldCheck, ExternalLink } from "lucide-react";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -154,6 +154,14 @@ export default function LoginPage() {
             Register New Account
           </Link>
         </div>
+
+        <Link
+          href="/"
+          className="flex items-center justify-center space-x-2 py-2 rounded-lg text-xs font-semibold text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition"
+        >
+          <ExternalLink className="w-4 h-4" />
+          <span>Visit Website</span>
+        </Link>
       </div>
     </div>
   );
