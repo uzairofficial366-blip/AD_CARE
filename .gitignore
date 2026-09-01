@@ -8,3 +8,5 @@ out/
 /prisma/migrations
 /prisma/dev.db
 /storage/uploads/
+
+.vercel

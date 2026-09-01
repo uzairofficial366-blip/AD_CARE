@@ -181,7 +181,7 @@ async function main() {
   const p1 = products[0], p2 = products[1], p3 = products[2], p4 = products[3], p5 = products[4], p6 = products[5], p7 = products[6], p8 = products[7], p9 = products[8], p10 = products[9];
   const p11 = products[10], p12 = products[11], p13 = products[12], p14 = products[13], p15 = products[14], p16 = products[15], p17 = products[16], p18 = products[17], p19 = products[18], p20 = products[19];
   const p21 = products[20], p22 = products[21], p23 = products[22], p24 = products[23], p25 = products[24], p26 = products[25], p27 = products[26], p28 = products[27], p29 = products[28], p30 = products[29];
-  const p31 = products[30], p32 = products[31], p33 = products[32], p34 = products[33], p35 = products[34];
+  const p31 = products[30], p32 = products[26], p33 = products[27], p34 = products[28], p35 = products[29];
 
   // ─── COUPONS ────────────────────────────────────────────────
   await Promise.all([
@@ -307,7 +307,10 @@ async function main() {
     { userId: c8.id, productId: p9.id, rating: 3, title: "Okay but average", comment: "Ibuprofen works fine but I prefer the brand-name version. These seem to take longer.", isApproved: false, isReported: false },
   ];
 
-  await Promise.all(reviewData.map((r) => prisma.review.create({ data: { ...r, createdAt: daysAgo(Math.floor(Math.random() * 20) + 1) } })));
+  await Promise.all(reviewData.map((r) => {
+    const { title, ...reviewFields } = r as typeof r & { title?: string };
+    return prisma.review.create({ data: { ...reviewFields, createdAt: daysAgo(Math.floor(Math.random() * 20) + 1) } });
+  }));
 
   // ─── SUPPORT TICKETS ────────────────────────────────────────
   const ticketData = [
