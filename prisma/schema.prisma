@@ -1,0 +1,722 @@
+// Database: SQLite for standalone local execution
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ─── USERS & AUTH ───────────────────────────────────────────
+
+model User {
+  id               String    @id @default(cuid())
+  name             String
+  email            String    @unique
+  passwordHash     String
+  role             String    @default("CUSTOMER") // CUSTOMER | PHARMACIST | ADMIN | SUPERADMIN
+  phone            String?
+  isActive         Boolean   @default(true)
+  twoFactorSecret  String?
+  twoFactorEnabled Boolean   @default(false)
+  lastLoginAt      DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  addresses             Address[]
+  orders                Order[]
+  prescriptions         Prescription[]         @relation("CustomerPrescriptions")
+  reviewedPrescriptions Prescription[]         @relation("PharmacistReviews")
+  prescriptionAuditLogs PrescriptionAuditLog[]
+  cartItems             CartItem[]
+  wishlistItems         WishlistItem[]
+  refillReminders       RefillReminder[]
+  reviews               Review[]
+  supportTickets        SupportTicket[]
+  assignedTickets       SupportTicket[]        @relation("AssignedTickets")
+  ticketMessages        TicketMessage[]
+  auditLogs             AuditLog[]             @relation("ActorAuditLogs")
+  notifications         Notification[]
+  payments              Payment[]
+  loyaltyAccount        LoyaltyAccount?
+  loyaltyTransactions   LoyaltyTransaction[]
+  referralsGiven       Referral[]              @relation("Referrer")
+  referralsReceived     Referral[]              @relation("Referred")
+  medicationSchedules   MedicationSchedule[]
+  stockAlerts           StockAlert[]
+
+  @@index([email])
+  @@index([role])
+}
+
+// ─── CATALOG ────────────────────────────────────────────────
+
+model Category {
+  id          String   @id @default(cuid())
+  name        String
+  slug        String   @unique
+  description String?
+  image       String?
+  banner      String?
+  sortOrder   Int      @default(0)
+  parentId    String?
+  isVisible   Boolean  @default(true)
+  seoTitle    String?
+  seoDescription String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  parent   Category?  @relation("SubCategories", fields: [parentId], references: [id])
+  children Category[] @relation("SubCategories")
+  products Product[]
+
+  @@index([slug])
+  @@index([parentId])
+}
+
+model Brand {
+  id          String   @id @default(cuid())
+  name        String
+  slug        String   @unique
+  logo        String?
+  banner      String?
+  description String?
+  isVisible   Boolean  @default(true)
+  seoTitle    String?
+  seoDescription String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  products Product[]
+
+  @@index([slug])
+}
+
+model Product {
+  id                     String   @id @default(cuid())
+  name                   String
+  slug                   String   @unique
+  genericName            String?
+  description            String
+  shortDescription       String?
+  sku                    String   @unique
+  barcode                String?
+  price                  Float
+  salePrice              Float?
+  costPrice              Float?
+  taxRate                Float    @default(0)
+  stockQuantity          Int      @default(0)
+  minimumStock           Int      @default(5)
+  isPrescriptionRequired Boolean  @default(false)
+  dosageForm             String?
+  strength               String?
+  packSize               String?
+  routeOfAdministration  String?
+  activeIngredients      String?
+  drugClass              String?
+  manufacturer           String?
+  storageRequirements    String?
+  usageInstructions      String?
+  warnings               String?
+  contraindications      String?
+  sideEffects            String?
+  drugInteractions       String?
+  imageUrl               String?
+  categoryId             String
+  brandId                String?
+  ratingAverage          Float    @default(0)
+  ratingCount            Int      @default(0)
+  salesCount             Int      @default(0)
+  viewCount              Int      @default(0)
+  isFeatured             Boolean  @default(false)
+  isNewArrival           Boolean  @default(false)
+  isBestSeller           Boolean  @default(false)
+  isVisible              Boolean  @default(true)
+  seoTitle               String?
+  seoDescription         String?
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  category        Category         @relation(fields: [categoryId], references: [id])
+  brand           Brand?           @relation(fields: [brandId], references: [id])
+  cartItems       CartItem[]
+  wishlistItems   WishlistItem[]
+  orderItems      OrderItem[]
+  refillReminders RefillReminder[]
+  reviews         Review[]
+  batches         Batch[]
+  stockAdjustments StockAdjustment[]
+  stockAlerts     StockAlert[]
+
+  @@index([categoryId])
+  @@index([brandId])
+  @@index([slug])
+  @@index([sku])
+  @@index([barcode])
+  @@index([isVisible])
+  @@index([isFeatured])
+}
+
+// ─── PRESCRIPTIONS ──────────────────────────────────────────
+
+model Prescription {
+  id              String    @id @default(cuid())
+  userId          String
+  patientName     String
+  patientAge      Int?
+  fileUrl         String
+  fileName        String
+  fileMimeType    String
+  status          String    @default("PENDING_REVIEW") // PENDING_REVIEW | UNDER_PHARMACIST_REVIEW | APPROVED | REJECTED | CLARIFICATION_REQUESTED | EXPIRED
+  pharmacistNotes String?
+  reviewedById    String?
+  reviewedAt      DateTime?
+  expiresAt       DateTime?
+  orderId         String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  user       User                   @relation("CustomerPrescriptions", fields: [userId], references: [id])
+  reviewedBy User?                  @relation("PharmacistReviews", fields: [reviewedById], references: [id])
+  auditLogs  PrescriptionAuditLog[]
+  orders     Order[]
+
+  @@index([userId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+model PrescriptionAuditLog {
+  id             String   @id @default(cuid())
+  prescriptionId String
+  actorId        String
+  oldStatus      String?
+  newStatus      String
+  notes          String?
+  createdAt      DateTime @default(now())
+
+  prescription Prescription @relation(fields: [prescriptionId], references: [id], onDelete: Cascade)
+  actor        User         @relation(fields: [actorId], references: [id])
+
+  @@index([prescriptionId])
+  @@index([createdAt])
+}
+
+// ─── CART & WISHLIST ────────────────────────────────────────
+
+model CartItem {
+  id        String   @id @default(cuid())
+  userId    String
+  productId String
+  quantity  Int      @default(1)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, productId])
+}
+
+model WishlistItem {
+  id        String   @id @default(cuid())
+  userId    String
+  productId String
+  createdAt DateTime @default(now())
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, productId])
+}
+
+// ─── ADDRESSES ──────────────────────────────────────────────
+
+model Address {
+  id        String   @id @default(cuid())
+  userId    String
+  fullName  String
+  phone     String
+  street    String
+  city      String
+  state     String
+  zipCode   String
+  country   String   @default("USA")
+  isDefault Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  orders Order[]
+
+  @@index([userId])
+}
+
+// ─── ORDERS ─────────────────────────────────────────────────
+
+model Order {
+  id                  String   @id @default(cuid())
+  orderNumber         String   @unique
+  userId              String
+  addressId           String?
+  shippingAddressJson String
+  status              String   @default("PENDING") // PENDING | PAYMENT_CONFIRMED | PRESCRIPTION_REQUIRED | PRESCRIPTION_VERIFICATION | PRESCRIPTION_APPROVED | PRESCRIPTION_REJECTED | PROCESSING | PACKED | ASSIGNED_TO_DELIVERY | OUT_FOR_DELIVERY | DELIVERED | CANCELLED | RETURN_REQUESTED | RETURNED | REFUND_PENDING | REFUNDED | PAYMENT_FAILED
+  paymentStatus       String   @default("PENDING") // PENDING | AUTHORIZED | PAID | FAILED | CANCELLED | PARTIALLY_REFUNDED | REFUNDED
+  paymentMethod       String   @default("CARD") // CARD | CASH_ON_DELIVERY | WALLET | BANK_TRANSFER
+  subtotal            Float
+  discountAmount      Float    @default(0)
+  shippingFee         Float    @default(0)
+  taxAmount           Float    @default(0)
+  totalAmount         Float
+  prescriptionId      String?
+  notes               String?
+  cancelReason        String?
+  returnReason        String?
+  estimatedDelivery   String?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  user         User            @relation(fields: [userId], references: [id])
+  address      Address?        @relation(fields: [addressId], references: [id])
+  prescription Prescription?   @relation(fields: [prescriptionId], references: [id])
+  items        OrderItem[]
+  tickets      SupportTicket[]
+  payments     Payment[]
+  delivery     Delivery?
+
+  @@index([userId])
+  @@index([status])
+  @@index([orderNumber])
+  @@index([createdAt])
+  @@index([paymentStatus])
+}
+
+model OrderItem {
+  id                     String  @id @default(cuid())
+  orderId                String
+  productId              String
+  productName            String
+  unitPrice              Float
+  quantity               Int
+  isPrescriptionRequired Boolean @default(false)
+  totalPrice             Float
+
+  order   Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id])
+
+  @@index([orderId])
+}
+
+// ─── PAYMENTS ───────────────────────────────────────────────
+
+model Payment {
+  id              String   @id @default(cuid())
+  orderId         String
+  userId          String
+  amount          Float
+  currency        String   @default("USD")
+  paymentMethod   String
+  gateway         String?
+  transactionId   String?
+  status          String   @default("PENDING") // PENDING | AUTHORIZED | PAID | FAILED | CANCELLED | PARTIALLY_REFUNDED | REFUNDED
+  gatewayResponse String?
+  refundAmount    Float    @default(0)
+  refundReason    String?
+  paidAt          DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  order Order @relation(fields: [orderId], references: [id])
+  user  User  @relation(fields: [userId], references: [id])
+
+  @@index([orderId])
+  @@index([userId])
+  @@index([status])
+  @@index([transactionId])
+}
+
+// ─── COUPONS ────────────────────────────────────────────────
+
+model Coupon {
+  id              String    @id @default(cuid())
+  code            String    @unique
+  description     String?
+  discountType    String    @default("PERCENTAGE") // PERCENTAGE | FIXED
+  discountValue   Float
+  maxDiscount     Float?
+  minOrderAmount  Float     @default(0)
+  usageLimit      Int?
+  usedCount       Int       @default(0)
+  perUserLimit    Int?
+  startDate       DateTime?
+  expiresAt       DateTime?
+  isActive        Boolean   @default(true)
+  createdAt       DateTime  @default(now())
+
+  @@index([code])
+  @@index([isActive])
+}
+
+// ─── SITE SETTINGS ──────────────────────────────────────────
+
+model SiteSetting {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  value     String
+  label     String
+  group     String   @default("general") // general | pharmacy | commerce | payment | shipping | email | security | seo
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([group])
+}
+
+// ─── REFILL REMINDERS ───────────────────────────────────────
+
+model RefillReminder {
+  id             String   @id @default(cuid())
+  userId         String
+  productId      String
+  frequencyDays  Int      @default(30)
+  nextRefillDate DateTime
+  notes          String?
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id])
+
+  @@index([userId])
+}
+
+// ─── REVIEWS ────────────────────────────────────────────────
+
+model Review {
+  id                String   @id @default(cuid())
+  userId            String
+  productId         String
+  rating            Int
+  comment           String
+  isApproved        Boolean  @default(true)
+  isVerifiedPurchase Boolean @default(false)
+  isReported        Boolean  @default(false)
+  reportReason      String?
+  createdAt         DateTime @default(now())
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([productId])
+  @@index([userId])
+  @@index([isApproved])
+}
+
+// ─── SUPPORT ────────────────────────────────────────────────
+
+model SupportTicket {
+  id           String   @id @default(cuid())
+  ticketNumber String   @unique
+  userId       String
+  assignedToId String?
+  orderId      String?
+  subject      String
+  category     String   @default("General")
+  status       String   @default("OPEN") // OPEN | ASSIGNED | PENDING_CUSTOMER | PENDING_INTERNAL | IN_PROGRESS | RESOLVED | CLOSED
+  priority     String   @default("Normal") // Low | Normal | High | Urgent
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  user       User            @relation(fields: [userId], references: [id])
+  assignedTo User?           @relation("AssignedTickets", fields: [assignedToId], references: [id])
+  order      Order?          @relation(fields: [orderId], references: [id])
+  messages   TicketMessage[]
+
+  @@index([userId])
+  @@index([status])
+  @@index([assignedToId])
+  @@index([priority])
+}
+
+model TicketMessage {
+  id        String   @id @default(cuid())
+  ticketId  String
+  senderId  String
+  message   String
+  isInternal Boolean @default(false)
+  createdAt DateTime @default(now())
+
+  ticketRef SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  sender    User          @relation(fields: [senderId], references: [id])
+
+  @@index([ticketId])
+}
+
+// ─── AUDIT LOG ──────────────────────────────────────────────
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  actorId    String?
+  action     String
+  entityType String
+  entityId   String
+  oldValues  String?
+  newValues  String?
+  metadata   String?
+  ipAddress  String?
+  createdAt  DateTime @default(now())
+
+  actor User? @relation("ActorAuditLogs", fields: [actorId], references: [id])
+
+  @@index([actorId])
+  @@index([entityType, entityId])
+  @@index([createdAt])
+}
+
+// ─── BATCH INVENTORY (NEW) ──────────────────────────────────
+
+model Batch {
+  id              String   @id @default(cuid())
+  productId       String
+  batchNumber     String
+  quantity         Int      @default(0)
+  reservedQuantity Int      @default(0)
+  costPrice       Float?
+  sellingPrice    Float?
+  manufacturingDate DateTime?
+  expiryDate      DateTime
+  supplierId      String?
+  warehouseLocation String?
+  receivedAt      DateTime @default(now())
+  status          String   @default("ACTIVE") // ACTIVE | DEPLETED | EXPIRED | DAMAGED | RECALLED
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  product  Product   @relation(fields: [productId], references: [id])
+  supplier Supplier? @relation(fields: [supplierId], references: [id])
+  stockAdjustments StockAdjustment[]
+
+  @@index([productId])
+  @@index([expiryDate])
+  @@index([batchNumber])
+  @@index([status])
+  @@index([supplierId])
+}
+
+model StockAdjustment {
+  id          String   @id @default(cuid())
+  batchId     String
+  productId   String
+  previousQty Int
+  newQty      Int
+  difference  Int
+  reason      String
+  adjustedBy  String?
+  notes       String?
+  createdAt   DateTime @default(now())
+
+  batch   Batch  @relation(fields: [batchId], references: [id])
+  product Product @relation(fields: [productId], references: [id])
+
+  @@index([batchId])
+  @@index([productId])
+  @@index([createdAt])
+}
+
+model StockAlert {
+  id        String   @id @default(cuid())
+  userId    String
+  productId String
+  isActive  Boolean  @default(true)
+  notified  Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, productId])
+}
+
+// ─── DELIVERY (NEW) ─────────────────────────────────────────
+
+model DeliveryAgent {
+  id        String   @id @default(cuid())
+  name      String
+  email     String?  @unique
+  phone     String
+  vehicle   String?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  deliveries Delivery[] @relation("AssignedAgent")
+
+  @@index([isActive])
+}
+
+model Delivery {
+  id                String    @id @default(cuid())
+  orderId           String    @unique
+  agentId           String?
+  trackingNumber    String?
+  status            String    @default("AWAITING_ASSIGNMENT") // AWAITING_ASSIGNMENT | ASSIGNED | PICKED_UP | OUT_FOR_DELIVERY | DELIVERED | FAILED | RETURNED
+  assignedAt        DateTime?
+  pickedUpAt        DateTime?
+  outForDeliveryAt  DateTime?
+  deliveredAt       DateTime?
+  deliveryNotes     String?
+  proofOfDelivery   String?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  order Order          @relation(fields: [orderId], references: [id])
+  agent DeliveryAgent? @relation("AssignedAgent", fields: [agentId], references: [id])
+
+  @@index([orderId])
+  @@index([agentId])
+  @@index([status])
+}
+
+// ─── SUPPLIERS & PROCUREMENT (NEW) ─────────────────────────
+
+model Supplier {
+  id        String   @id @default(cuid())
+  name      String
+  contactPerson String?
+  email     String?
+  phone     String?
+  address   String?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  batches        Batch[]
+  purchaseOrders PurchaseOrder[]
+
+  @@index([isActive])
+}
+
+model PurchaseOrder {
+  id             String   @id @default(cuid())
+  orderNumber    String   @unique
+  supplierId     String
+  status         String   @default("DRAFT") // DRAFT | SUBMITTED | CONFIRMED | SHIPPED | RECEIVED | CANCELLED
+  totalAmount    Float    @default(0)
+  notes          String?
+  expectedDate   DateTime?
+  receivedAt     DateTime?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  supplier Supplier          @relation(fields: [supplierId], references: [id])
+  items    PurchaseOrderItem[]
+
+  @@index([supplierId])
+  @@index([status])
+}
+
+model PurchaseOrderItem {
+  id              String  @id @default(cuid())
+  purchaseOrderId String
+  productId       String
+  batchNumber     String?
+  quantity        Int
+  unitCost        Float
+  expiryDate      DateTime?
+  receivedQty     Int     @default(0)
+
+  purchaseOrder PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
+
+  @@index([purchaseOrderId])
+}
+
+// ─── NOTIFICATIONS (NEW) ────────────────────────────────────
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  title     String
+  message   String
+  type      String   // order | prescription | promotion | system | security
+  link      String?
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([isRead])
+  @@index([type])
+  @@index([createdAt])
+}
+
+// ─── LOYALTY (NEW) ──────────────────────────────────────────
+
+model LoyaltyAccount {
+  id     String @id @default(cuid())
+  userId String @unique
+  points Int    @default(0)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  transactions LoyaltyTransaction[]
+
+  @@index([userId])
+}
+
+model LoyaltyTransaction {
+  id                String   @id @default(cuid())
+  loyaltyAccountId  String
+  userId            String
+  amount            Int
+  type              String   // EARN | REDEEM | EXPIRE | ADJUST
+  description       String?
+  orderId           String?
+  createdAt         DateTime @default(now())
+
+  loyaltyAccount LoyaltyAccount @relation(fields: [loyaltyAccountId], references: [id])
+  user           User           @relation(fields: [userId], references: [id])
+
+  @@index([loyaltyAccountId])
+  @@index([type])
+}
+
+// ─── REFERRALS (NEW) ───────────────────────────────────────
+
+model Referral {
+  id              String   @id @default(cuid())
+  referrerId      String
+  referredId      String?
+  referralCode    String   @unique
+  status          String   @default("PENDING") // PENDING | QUALIFIED | REWARDED
+  qualifyingAction String?
+  rewardIssued    Boolean  @default(false)
+  createdAt       DateTime @default(now())
+
+  referrer User @relation("Referrer", fields: [referrerId], references: [id])
+  referred User? @relation("Referred", fields: [referredId], references: [id])
+
+  @@index([referrerId])
+  @@index([referralCode])
+}
+
+// ─── MEDICATION SCHEDULE (NEW) ──────────────────────────────
+
+model MedicationSchedule {
+  id          String   @id @default(cuid())
+  userId      String
+  productName String
+  dose        String?
+  frequency   String?
+  timeOfDay   String?
+  startDate   DateTime
+  endDate     DateTime?
+  notes       String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([isActive])
+}
