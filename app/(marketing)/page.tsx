@@ -16,24 +16,31 @@ import {
 export const revalidate = 0;
 
 export default async function HomePage() {
-  const session = await getSession();
+  let session = null;
   let user = null;
-  if (session?.userId) {
-    user = await prisma.user.findUnique({ where: { id: session.userId } });
-  }
+  let categories: any[] = [];
+  let featuredProducts: any[] = [];
+  let rxProducts: any[] = [];
 
-  // Fetch Categories & Featured Products & Site Settings
-  const categories = await prisma.category.findMany({ where: { isVisible: true }, take: 12, orderBy: { name: "asc" } });
-  const featuredProducts = await prisma.product.findMany({
-    take: 8,
-    where: { isFeatured: true, isVisible: true },
-    include: { category: true, brand: true },
-  });
-  const rxProducts = await prisma.product.findMany({
-    take: 4,
-    where: { isPrescriptionRequired: true, isVisible: true },
-    include: { category: true, brand: true },
-  });
+  try {
+    session = await getSession();
+    if (session?.userId) {
+      user = await prisma.user.findUnique({ where: { id: session.userId } });
+    }
+    categories = await prisma.category.findMany({ where: { isVisible: true }, take: 12, orderBy: { name: "asc" } });
+    featuredProducts = await prisma.product.findMany({
+      take: 8,
+      where: { isFeatured: true, isVisible: true },
+      include: { category: true, brand: true },
+    });
+    rxProducts = await prisma.product.findMany({
+      take: 4,
+      where: { isPrescriptionRequired: true, isVisible: true },
+      include: { category: true, brand: true },
+    });
+  } catch (e) {
+    console.error("Database connection failed:", e);
+  }
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col font-sans">
