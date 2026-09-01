@@ -6,4 +6,5 @@ out/
 *.log
 .DS_Store
 /prisma/migrations
+/prisma/dev.db
 /storage/uploads/
