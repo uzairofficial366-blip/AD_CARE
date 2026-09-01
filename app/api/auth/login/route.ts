@@ -41,7 +41,12 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(genericError, { status: 401 });
   }
 
-  await createSession({ userId: user.id, role: user.role as Role });
+  try {
+    await createSession({ userId: user.id, role: user.role as Role });
+  } catch (err) {
+    console.error("Failed to create session:", err);
+    return NextResponse.json({ error: "Login failed. Please try again." }, { status: 500 });
+  }
 
   return NextResponse.json({ ok: true, role: user.role });
 }
